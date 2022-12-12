@@ -1,11 +1,11 @@
-import numpy as np
-
 import networkx as nx
 from networkx.algorithms import isomorphism
 
-from .hameln import HamelnModel, HamelnGraph, HamelnNode, HamelnTensor
+from .hameln import HamelnModel, HamelnGraph
+
 
 class HamelnPatternNode:
+
     def __init__(self,
                  idx,
                  op_type=None,
@@ -32,6 +32,7 @@ class HamelnPatternNode:
 
 
 class HamelnPatternTree:
+
     def __init__(self, pattern_nodes=None):
         self.pattern_nodes = pattern_nodes if pattern_nodes else []
 
@@ -58,13 +59,14 @@ class HamelnPatternTree:
         return self
 
     def show(self):
-        assert self.pattern_graph is not None, f"call compile graph before show"
+        assert self.pattern_graph is not None, "call compile graph before show"
 
         nx.draw_kamada_kawai(self.pattern_graph, with_labels=True)
         print(self)
 
 
 class HamelnPattern:
+
     def __init__(self):
         self.pattern_tree = None
         self.rewriter = None
@@ -104,7 +106,7 @@ class HamelnPattern:
         inputs=None,
         outputs=None,
     ):
-        #TODO(chen.chen): I don't know here what exactly we need from subgraph...
+        # TODO(chen.chen): I don't know here what exactly we need from subgraph...
         return self._construct(all_nodes, start_nodes, end_nodes)
 
     def construct_pattern_from_graph(self, all_nodes):
@@ -162,7 +164,7 @@ class HamelnPattern:
     def rewrite_graph(self, hameln_graph: HamelnGraph):
         matching = self.match(hameln_graph)
 
-        #TODO(chen.chen): wtf, I don't know why I add a status variable here, remove it
+        # TODO(chen.chen): wtf, I don't know why I add a status variable here, remove it
         rewrite_success = True
 
         remove_nodes = []
@@ -188,40 +190,36 @@ class HamelnPattern:
         return self.rewrite_graph(hameln_model.hameln_graph)
 
 
-
 class HamelnPatternManager:
     _instance = None
     all_pattern = {}
-    
+
     def __new__(cls, *args, **kw):
         if cls._instance is None:
             cls._instance = object.__new__(cls, *args, **kw)
         return cls._instance
 
-    
     def __repr__(self):
         info = f"HamelnPatternManager with {len(HamelnPatternManager.all_pattern)} patterns:\n\n"
         if len(HamelnPatternManager.all_pattern) > 0:
-            info += "\n".join([f"\t{i}" for i in list(HamelnPatternManager.all_pattern.keys())])
+            info += "\n".join([
+                f"\t{i}" for i in list(HamelnPatternManager.all_pattern.keys())
+            ])
         return info
-        
+
     def get_available_pattern(self):
         return list(HamelnPatternManager.all_pattern.keys())
-
-
 
     def get_pattern(self, pattern_name):
         pattern = HamelnPatternManager.all_pattern.get(pattern_name, None)
         if pattern is None:
             raise ValueError(f"can not find pattern: {pattern_name}")
         return pattern
-    
-    
+
     def register_pattern(self, pattern_name, pattern):
         if pattern_name in HamelnPatternManager.all_pattern:
             raise KeyError(f"pattern: {pattern_name} exists")
         HamelnPatternManager.all_pattern[pattern_name] = pattern
-
 
     def rewrite(self, hameln_graph_or_model, pattern_name=None):
         if pattern_name is None:
@@ -231,17 +229,16 @@ class HamelnPatternManager:
         elif isinstance(pattern_name, list):
             pattern_list = pattern_name
         else:
-            raise ValueError(f"pattern_name should be str/list or None(using all available pattern)")
+            raise ValueError(
+                "pattern_name should be str/list or None(using all available pattern)"
+            )
 
         if isinstance(hameln_graph_or_model, HamelnModel):
             graph = hameln_graph_or_model.hameln_graph
         elif isinstance(hameln_graph_or_model, HamelnGraph):
             graph = hameln_graph_or_model
         else:
-            raise ValueError(f"input should be HamelnModel/HamelnGraph")
+            raise ValueError("input should be HamelnModel/HamelnGraph")
         for name in pattern_list:
-            pattern:HamelnPattern = HamelnPatternManager.all_pattern[name]
+            pattern: HamelnPattern = HamelnPatternManager.all_pattern[name]
             pattern.rewrite_graph(graph)
-        
-        
-

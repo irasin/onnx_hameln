@@ -2,16 +2,18 @@ import numpy as np
 
 import onnx
 import onnx.helper as onnx_helper
-import onnx.numpy_helper as onnx_numpy_helper
 
 from ..pattern import HamelnPattern
-from ..hameln import HamelnGraph,HamelnNode, HamelnTensor
+from ..hameln import HamelnGraph, HamelnNode, HamelnTensor
 
-conv_conv_concat_bn_leakyrelu = HamelnPattern().construct_pattern_from_definition(
+conv_conv_concat_bn_leakyrelu = HamelnPattern(
+).construct_pattern_from_definition(
     op_type_list=["Conv", "Conv", "Concat", "BatchNormalization", "LeakyRelu"],
     linkage=[[0, 2], [1, 2], [2, 3], [3, 4]])
 
-def _conv_conv_concat_bn_leakyrelu_rewrite(hameln_graph: HamelnGraph, node_mapping):
+
+def _conv_conv_concat_bn_leakyrelu_rewrite(hameln_graph: HamelnGraph,
+                                           node_mapping):
     conv_0: HamelnNode = hameln_graph.node[node_mapping[0]]
     conv_1: HamelnNode = hameln_graph.node[node_mapping[1]]
     concat_2: HamelnNode = hameln_graph.node[node_mapping[2]]
@@ -21,7 +23,7 @@ def _conv_conv_concat_bn_leakyrelu_rewrite(hameln_graph: HamelnGraph, node_mappi
         conv:
         y1 = W @ input + B ( @ stands for conv )
 
-        bn: 
+        bn:
         y2 = ((y1 - mean) / sqrt(var)) * weight + bias
 
         ==》
@@ -35,14 +37,14 @@ def _conv_conv_concat_bn_leakyrelu_rewrite(hameln_graph: HamelnGraph, node_mappi
         then,
             new_W = scale * W
             new_B = scale * (B - mean) + bias
-        
+
     """
 
     conv_0_input = conv_0.input
     conv_0_weight = conv_0_input[1]
     conv_0_weight_data = conv_0_weight.get_data()
     if len(conv_0_input) == 3:
-        conv_0_bias = conv_0_bias[2]
+        conv_0_bias = conv_0_input[2]
     else:
         conv_0_bias = onnx_helper.make_tensor(
             name=conv_0_weight.get_name().replace("weight", "bias") +
@@ -60,7 +62,7 @@ def _conv_conv_concat_bn_leakyrelu_rewrite(hameln_graph: HamelnGraph, node_mappi
     conv_1_weight = conv_1_input[1]
     conv_1_weight_data = conv_1_weight.get_data()
     if len(conv_1_input) == 3:
-        conv_1_bias = conv_1_bias[2]
+        conv_1_bias = conv_1_input[2]
     else:
         conv_1_bias = onnx_helper.make_tensor(
             name=conv_1_weight.get_name().replace("weight", "bias") +
@@ -145,4 +147,5 @@ def _conv_conv_concat_bn_leakyrelu_rewrite(hameln_graph: HamelnGraph, node_mappi
     return True, remove_node, insert_node
 
 
-conv_conv_concat_bn_leakyrelu.register_rewriter(_conv_conv_concat_bn_leakyrelu_rewrite)
+conv_conv_concat_bn_leakyrelu.register_rewriter(
+    _conv_conv_concat_bn_leakyrelu_rewrite)

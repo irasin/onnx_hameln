@@ -1,7 +1,6 @@
 import copy
 from collections import defaultdict
 
-
 import onnx
 import onnx.helper as onnx_helper
 import onnx.numpy_helper as onnx_numpy_helper
@@ -9,19 +8,17 @@ import onnx.numpy_helper as onnx_numpy_helper
 import onnxoptimizer
 
 
-
-import networkx as nx
-from networkx.algorithms import isomorphism
-
-
-
-
 class HamelnTensor:
-    def __init__(self, tensor, is_fake=False):
+
+    def __init__(self, tensor):
+        if not isinstance(tensor, onnx.TensorProto) and not isinstance(
+                tensor, onnx.ValueInfoProto):
+            raise ValueError(
+                f"tensor should be TensorProto or ValueInfoProto, got {type(tensor)} instead"
+            )
         self.tensor = tensor
         self.has_data = isinstance(self.tensor, onnx.TensorProto)
         self.node = None
-        self.is_fake = is_fake
 
     def __repr__(self):
         if self.has_data:
@@ -31,19 +28,17 @@ class HamelnTensor:
 
     def __hash__(self):
         return hash(id(self))
-    
+
     def __eq__(self, other):
         if self.tensor == other.tensor and\
-            self.has_data == other.has_data and\
-            self.node == other.node and\
-            self.is_fake == other.is_fake:
-        
+           self.has_data == other.has_data and\
+           self.node == other.node:
             return True
         return False
-    
+
     def __ne__(self, other):
         return not self == other
-    
+
     def set_node(self, node):
         self.node = node
 
@@ -90,6 +85,9 @@ class HamelnTensor:
         if isinstance(dim_value_dict, list):
             dim_value_dict = {idx: i for idx, i in enumerate(dim_value_dict)}
         all_dim = self.tensor.type.tensor_type.shape.dim
+
+        if len(all_dim) == 0:
+            raise ValueError("can not set dim to empty value_info")
         for idx, value in dim_value_dict.items():
             if isinstance(value, str):
                 all_dim[idx].dim_param = "batch"
@@ -105,11 +103,14 @@ class HamelnTensor:
         assert len(dim_list) == 4
         new_dim = [dim_list[0], dim_list[2], dim_list[3], dim_list[1]]
         return new_dim
-    
-    
+
 
 class HamelnNode:
+
     def __init__(self, node):
+        if not isinstance(node, onnx.NodeProto):
+            raise ValueError(
+                f"node should be NodeProto, got {type(node)} instead")
         self.node = node
 
         self.input = []
@@ -117,6 +118,21 @@ class HamelnNode:
 
         self.from_node = []
         self.to_node = []
+
+    def __hash__(self):
+        return hash(id(self))
+
+    def __eq__(self, other):
+        if self.node == other.node \
+           and self.input == other.input \
+           and self.output == other.output \
+           and self.from_node == other.from_node\
+           and self.to_node == other.to_node:
+            return True
+        return False
+
+    def __ne__(self, other):
+        return not self == other
 
     def __repr__(self):
         return onnx_helper.printable_node(self.node)
@@ -131,6 +147,10 @@ class HamelnNode:
         return self.node.attribute
 
     def add_input(self, hameln_tensor: HamelnTensor):
+        if not isinstance(hameln_tensor, HamelnTensor):
+            raise ValueError(
+                f"input should be HamelnTensor, got {type(hameln_tensor)} instead"
+            )
         self.node.input.append(hameln_tensor.get_name())
         self.input.append(hameln_tensor)
 
@@ -144,7 +164,11 @@ class HamelnNode:
 
 
 class HamelnGraph:
+
     def __init__(self, graph):
+        if not isinstance(graph, onnx.GraphProto):
+            raise ValueError(
+                f"graph should be GraphProto, got {type(graph)} instead")
         self.graph = graph
         self.node = None
         self.tensor = None
@@ -155,6 +179,22 @@ class HamelnGraph:
 
     def __repr__(self):
         return onnx_helper.printable_graph(self.graph)
+
+    def __hash__(self):
+        return hash(id(self))
+
+    def __eq__(self, other):
+        if self.graph == other.graph and\
+           self.node == other.node and\
+           self.tensor == other.tensor and\
+           self.weight == other.weight and\
+           self.graph_input == other.graph_input and\
+           self.graph_output == other.graph_output:
+            return True
+        return False
+
+    def __ne__(self, other):
+        return not self == other
 
     def get_name(self):
         return self.graph.name
@@ -189,7 +229,7 @@ class HamelnGraph:
         tmp_inputs = copy.deepcopy(self.graph_input)
         weight_names = set(i.get_name() for i in self.weight)
         for i in tmp_inputs:
-            if i in weight_names:
+            if i.get_name() in weight_names:
                 self.graph_input.remove(i)
 
         shape_input = []
@@ -207,9 +247,10 @@ class HamelnGraph:
 
         for i in self.tensor:
             try:
-                i.set_batch_size(batch_size) # internal tensor may not contain shape info
-            except:
-                pass
+                i.set_batch_size(
+                    batch_size)  # internal tensor may not contain shape info
+            except Exception:
+                ...
         return self
 
     def set_nhwc_input_format(self):
@@ -218,7 +259,7 @@ class HamelnGraph:
 
         is_4d_tensor = all(len(i.get_dim()) == 4 for i in self.graph_input)
         if not is_4d_tensor:
-            raise ValueError(f"all input tensors must be 4-dimension tensor")
+            raise ValueError("all input tensors must be 4-dimension tensor")
 
         input_names = [i.get_name() for i in self.graph_input]
         input_shapes = [i.get_dim() for i in self.graph_input]
@@ -296,8 +337,8 @@ class HamelnGraph:
 
     @staticmethod
     def topological_sort_hameln_node(nodes):
-        ## since the original model is a DAG, we do not need to check whether the subgraph is a DAG
-        ## TODO(chen.chen): maybe we need add DAG check if we want use this function independently
+        # since the original model is a DAG, we do not need to check whether the subgraph is a DAG
+        # TODO(chen.chen): maybe we need add DAG check if we want use this function independently
         V = nodes[:]
         E = []
         for node in V:
@@ -429,7 +470,7 @@ class HamelnGraph:
         if actual_output_tensors != expect_output_tensor:
             err_info = f"expected subgraph output are {[i.get_name() for i in expect_output_tensor]},\nactual subgraph output are {[i.get_name() for i in actual_output_tensors]}, The subgraph does not converge to the specified end_nodes"
 
-            #TODO(chen.chen): add detailed error infomation
+            # TODO(chen.chen): add detailed error infomation
             raise ValueError(err_info)
 
         topo_order_graph = HamelnGraph.topological_sort_hameln_node(
@@ -439,6 +480,7 @@ class HamelnGraph:
 
 
 class HamelnModel:
+
     def __init__(self, model):
         if isinstance(model, str):
             model = onnx.load(model)
@@ -469,7 +511,7 @@ class HamelnModel:
         passes = onnxoptimizer.get_available_passes()
 
         no_need = [
-            #TODO(chen.chen): the following passes cause some error, need to debug
+            # TODO(chen.chen): the following passes cause some error, need to debug
             "lift_lexical_references",
             "split_init",
             "split_predict",
