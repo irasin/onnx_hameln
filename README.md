@@ -1,9 +1,8 @@
 # ONNX model rewriter tool
 
+[![build_test_upload](https://github.com/irasin/onnx_hameln/actions/workflows/python-package.yml/badge.svg?branch=main)](https://github.com/irasin/onnx_hameln/actions/workflows/python-package.yml)
 
 a pure python tool to rewrite and optimize onnx model
-
-[![build_test_upload](https://github.com/irasin/onnx_hameln/actions/workflows/python-package.yml/badge.svg)](https://github.com/irasin/onnx_hameln/actions/workflows/python-package.yml)
 
 ## usage
 
