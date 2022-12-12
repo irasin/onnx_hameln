@@ -3,6 +3,7 @@
 
 a pure python tool to rewrite and optimize onnx model
 
+[![build_test_upload](https://github.com/irasin/onnx_hameln/actions/workflows/python-package.yml/badge.svg)](https://github.com/irasin/onnx_hameln/actions/workflows/python-package.yml)
 
 ## usage
 
