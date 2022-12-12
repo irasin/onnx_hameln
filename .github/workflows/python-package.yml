@@ -1,17 +1,16 @@
 # This workflow will install Python dependencies, run tests and lint with a variety of Python versions
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
 
-name: Python package
+name: build_test_upload
 
 on:
   push:
-    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
 jobs:
-  build:
-
+  build_test:
+    name: Build source distribution and Test
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
@@ -26,8 +25,8 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        python -m pip install flake8 pytest onnx onnxoptimizer networkx numpy
+        python3 -m pip install --upgrade pip
+        python3 -m pip install flake8 pytest onnx onnxoptimizer networkx numpy
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Lint with flake8
       run: |
@@ -35,10 +34,9 @@ jobs:
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --per-file-ignores="__init__.py: F401" --ignore=E501,W504
-
     - name: Build sdist
-      run: pipx run build --sdist
-    - name: Install and test sdist
+      run: python3 setup.py sdist
+    - name: Install and test sdist bdist_wheel
       run: |
           ls
           cd dist
@@ -48,4 +46,53 @@ jobs:
           pytest test
     - uses: actions/upload-artifact@v2
       with:
-        path: dist/*.tar.gz
+        path: dist/*
+    - uses: actions/download-artifact@v3
+      with:
+          # unpacks default artifact into dist/
+          # if `name: artifact` is omitted, the action will create extra parent dir
+          name: artifact
+          path: dist
+  # build_wheels:
+  #   env:
+  #     CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
+  #     CIBW_BEFORE_ALL_LINUX: WD=`pwd` && /opt/python/cp38-cp38/bin/python -m pip install cmake && cp /opt/_internal/cpython-3.8.13/bin/cmake /usr/local/bin/cmake && cmake --version && whereis cmake
+  #     CIBW_BEFORE_ALL_MACOS: WD=`pwd` && pip install cmake
+  #     CIBW_TEST_REQUIRES_LINUX: pytest onnx onnxoptimizer networkx numpy
+  #     CIBW_TEST_REQUIRES_MACOS: pytest onnx onnxoptimizer networkx numpy
+  #     CIBW_TEST_REQUIRES_WINDOWS: pytest onnx onnxoptimizer networkx numpy
+  #     CIBW_BEFORE_TEST_LINUX: pip install pytest onnx onnxoptimizer networkx numpy
+  #     CIBW_TEST_COMMAND: pytest {project}/test
+  #     CIBW_TEST_COMMAND_LINUX: pytest {project}/test
+  #     # Only build on Python 3 and skip 32-bit builds
+  #     CIBW_BUILD: cp3?-*
+  #   name: Build wheels on ${{ matrix.os }}
+  #   runs-on: ${{ matrix.os }}
+  #   strategy:
+  #     fail-fast: true
+  #     matrix:
+  #       os: [ubuntu-20.04, windows-2019, macos-10.15]
+  #   steps:
+  #   - uses: actions/checkout@v2
+  #   - name: Build wheels
+  #     uses: pypa/cibuildwheel@v2.7.0
+  #   - uses: actions/upload-artifact@v2
+  #     with:
+  #       path: ./wheelhouse/*.whl
+  upload_pypi:
+    name: Upload to PyPI
+    needs: [build_test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          # unpacks default artifact into dist/
+          # if `name: artifact` is omitted, the action will create extra parent dir
+          name: artifact
+          path: dist
+      - name: Publish distribution 📦 to PyPI
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          skip_existing: true
